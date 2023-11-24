@@ -80,9 +80,24 @@ class ClientConnection:
         self.connection.sendall(message.encode('utf-8'))
 
     # Receive a message from the node
-    def receive(self):
-        return self.connection.recv(1024).decode('utf-8')
+    # def receive(self):
+    #     return self.connection.recv(1024).decode('utf-8')
 
+    def receive(self):
+        buffer_size = 1024
+        data = b""
+
+        while True:
+            chunk = self.connection.recv(buffer_size)
+            if not chunk:
+                break
+            data += chunk
+
+            if b"\r\n" in chunk:
+                break
+
+        return data.decode('utf-8')
+    
     # Close the connection with the node
     def close(self):
         self.connection.close()

@@ -24,7 +24,7 @@ def main():
             print(f"Nodo B recibió el mensaje del nodo de redirección: {mensaje_redireccion}")
             
             # Enviar respuesta al nodo de redirección
-            response = f"{mensaje_redireccion}-455.5"
+            response = f"{mensaje_redireccion}-120.4"
             conexion_redireccion.send(response.encode('utf-8'))
             
             # Romper el bucle después de procesar el mensaje "L"

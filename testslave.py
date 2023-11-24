@@ -2,7 +2,7 @@ import socket
 
 def main():
     # Dirección y puerto del servidor
-    server_address = ('localhost', 60000)
+    server_address = ('localhost', 50000)
 
     # Crear un socket del cliente
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -11,9 +11,8 @@ def main():
         # Conectar al servidor
         client_socket.connect(server_address)
         
-        local_address = client_socket.getsockname()
         # Enviar el mensaje "Hola, mundo"
-        mensaje = f"L-11"
+        mensaje = f"L-1-10\n"
         client_socket.send(mensaje.encode('utf-8'))
         
         print(f"Mensaje enviado: {mensaje}")
