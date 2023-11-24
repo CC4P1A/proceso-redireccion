@@ -198,23 +198,27 @@ def handle_slave_response(slave_connection, master_connection, list_slaves):
             elif response.startswith("M"):
                 print("[M] Se encontró el nonce...")
                 # Send the message to all the slaves with mode V
+                # V-nonce-tiempo-nroCeros-hashAnt-hashRaiz-HashTotal
                 nonce_found = response.replace("M", "V", 1)
-                send_all_slaves(nonce_found, list_slaves)
+                arr = nonce_found.split('-')
+                new_message = "-".join(arr[:2] + arr[3:])
+                send_all_slaves(new_message, list_slaves)
             # Slave node sends the validation
             elif response.startswith("V"):
                 print("[V] Un nodo slave valido el hash ...")
                 validation_response = response.split('-')[1]
-                if validation_response == 'True':
-                    validation.append(True)
-                else:
-                    validation.append(False)
-                if validation.count(True) == len(list_slaves):
+                validation.append(validation_response)
+                if len(validation) == len(list_slaves):
                     print("Se valido el nonce...")
-                    percentage = validation.count(True)/len(list_slaves)
-                    master_connection.send(f"{nonce_found}-{percentage}\n")
+                    #percentage = validation.count('true')/len(validation)
+                    # V-nonce-tiempo-nroCeros-hashAnt-hashRaiz-HashTotal\r\n-porcentaje
+                    nonce_found = nonce_found.replace("\r\n", f"-{1}\r\n")
+                    master_connection.send(nonce_found)
                     validation.clear()
+                    nonce_found=''
             # Slave node sends the hash
             elif response.startswith("F"):
+                queue_response.put(response)
                 print("[F] Se recibió un error...")
             # Unknown message
             else:
@@ -252,12 +256,12 @@ async def handle_client(websocket):
                 # Extract the necessary information
                 mode = data['type']
                 origin_account = data['origin_account']
-                destiny_account = data['destination_account']
+                destination_account = data['destination_account']
                 amount = data['amount']
                 query_id = get_unique_id()
                 # Create the query transaction
-                transaction = f"{mode}-{query_id}-{origin_account}-{destiny_account}-{amount}\n"
-                print(f"Recibe transaccion id: {query_id} monto: {amount} acc_from:{origin_account} hacia acc_to:{destiny_account}")
+                transaction = f"{mode}-{query_id}-{origin_account}-{destination_account}-{amount}\n"
+                print(f"Recibe transaccion id: {query_id} monto: {amount} acc_from:{origin_account} hacia acc_to:{destination_account}")
                 # Add the query to the list of queries
                 queries_dict.append({'id': query_id, 'client': websocket})
                 # Add message to the queue of transactions
@@ -296,7 +300,7 @@ def handle_queues(master_connection, slaves_list):
         # Wait 100 ms to check again
         time.sleep(0.1)
 
-async def handle_server_forwarder():
+async def handle_response_client():
     # Loop to check if the queues are not empty
     while True:
         if not queue_response.empty():
@@ -321,9 +325,9 @@ async def handle_server_forwarder():
                     id_client = message_to_client.split('-')[1]
                     origin_account = message_to_client.split('-')[2]
                     origin_amount = message_to_client.split('-')[3]
-                    destiny_account = message_to_client.split('-')[4]
-                    destiny_amount = message_to_client.split('-')[5].replace('\r\n', '')
-                    json_response = json.dumps({'type': mode, 'id': id_client, 'origin_account': origin_account, 'origin_amount': origin_amount, 'destiny_account': destiny_account, 'destiny_amount': destiny_amount})
+                    destination_account = message_to_client.split('-')[4]
+                    destination_amount = message_to_client.split('-')[5].replace('\r\n', '')
+                    json_response = json.dumps({'type': mode, 'id': id_client, 'origin_account': origin_account, 'origin_amount': origin_amount, 'destination_account': destination_account, 'destination_amount': destination_amount})
                 elif mode == 'F':
                     error = message_to_client.split('-')[1].replace('\r\n', '')
                     json_response = json.dumps({'type': mode, 'error': error})
@@ -395,6 +399,6 @@ async def main_server_forwarder():
 
 if __name__ == "__main__":
     main()
-    asyncio.run(handle_server_forwarder())
+    asyncio.run(handle_response_client())
 
 # python main.py
