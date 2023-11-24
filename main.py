@@ -105,8 +105,6 @@ queue_reads = queue.Queue()
 queue_transactions = queue.Queue()
 queue_response = queue.Queue()
 queries_dict = []
-
-index_query = 1
 validation = []
 
 # ------------------------------------
@@ -115,14 +113,6 @@ validation = []
 # Function receives a size and returns a random index
 def get_random_index(size):
     return random.randint(0, size - 1)
-
-
-# ------------------------------------
-# Function to get a unique id
-# ------------------------------------
-def get_unique_id(index_query):
-    index_query += 1
-    return index_query
 
 
 # ------------------------------------
@@ -169,7 +159,7 @@ def handle_master_response(master_connection, list_slaves):
                 print("[A] Se recibió una transacción...")
                 queue_response.put(response)
                 aux = response.split('-')
-                response = f"{aux[0]}-{aux[2]}-{aux[3]}-{aux[4]}-{aux[5]}"
+                response = "-".join([aux[0]] + aux[2:])
                 send_all_slaves(response, list_slaves)
             # Master node sends the hash
             elif response.startswith("M"):
@@ -231,10 +221,13 @@ def handle_slave_response(slave_connection, master_connection, list_slaves):
                 print(f"Respuesta desconocida: {response} desde el nodo Slave: {str(slave_connection)}")
 
 
+def get_unique_id():
+    return uuid.uuid4().int & (1<<16)-1
+
+
 # ------------------------------------
 # Function handle client (WebSocket)
 # ------------------------------------
-
 async def handle_client(websocket):
     # Add your WebSocket handling logic here
     print(f"Cliente conectado desde {websocket.remote_address}")
@@ -247,10 +240,10 @@ async def handle_client(websocket):
                 # Extract the necessary information
                 mode = data['type']
                 origin_account = data['origin_account']
-                query_id = get_unique_id(index_query)
+                query_id = get_unique_id()
                 # Create the query read
                 read = f"{mode}-{query_id}-{origin_account}\n"
-                print(f"Recibe consulta {query_id} de lectura para la cuenta {origin_account}")
+                print(f"Recibe id_solicitud: {query_id} de lectura para la cuenta {origin_account}")
                 # Add the query to the list of queries
                 queries_dict.append({'id': query_id, 'client': websocket})
                 # Add message to the queue of reads
@@ -261,10 +254,10 @@ async def handle_client(websocket):
                 origin_account = data['origin_account']
                 destiny_account = data['destination_account']
                 amount = data['amount']
-                query_id = get_unique_id(index_query)
+                query_id = get_unique_id()
                 # Create the query transaction
                 transaction = f"{mode}-{query_id}-{origin_account}-{destiny_account}-{amount}\n"
-                print(f"Recibe transaccion {query_id} de {amount} desde acc:{origin_account} hacia acc:{destiny_account}")
+                print(f"Recibe transaccion id: {query_id} monto: {amount} acc_from:{origin_account} hacia acc_to:{destiny_account}")
                 # Add the query to the list of queries
                 queries_dict.append({'id': query_id, 'client': websocket})
                 # Add message to the queue of transactions
@@ -311,7 +304,7 @@ async def handle_server_forwarder():
             message_to_client = queue_response.get()
             # Get the ip and port of the client
             query_id = message_to_client.split('-')[1]
-            print(f"Se encontro una respuesta para {query_id}...")
+            print(f"Se encontro una respuesta para id_solicitud: {query_id}...")
             # Find the client socket corresponding to the user's IP and port
             client_websocket = find_client_socket(query_id)
             # If the client socket was found
@@ -322,19 +315,22 @@ async def handle_server_forwarder():
                 if mode == 'L':
                     id_client = message_to_client.split('-')[1]
                     origin_account = message_to_client.split('-')[2]
-                    origin_amount = message_to_client.split('-')[3]
+                    origin_amount = message_to_client.split('-')[3].replace('\r\n', '')
                     json_response = json.dumps({'type': mode, 'id': id_client, 'origin_account': origin_account, 'origin_amount': origin_amount})
                 elif mode == 'A':
                     id_client = message_to_client.split('-')[1]
                     origin_account = message_to_client.split('-')[2]
                     origin_amount = message_to_client.split('-')[3]
                     destiny_account = message_to_client.split('-')[4]
-                    destiny_amount = message_to_client.split('-')[5]
+                    destiny_amount = message_to_client.split('-')[5].replace('\r\n', '')
                     json_response = json.dumps({'type': mode, 'id': id_client, 'origin_account': origin_account, 'origin_amount': origin_amount, 'destiny_account': destiny_account, 'destiny_amount': destiny_amount})
+                elif mode == 'F':
+                    error = message_to_client.split('-')[1].replace('\r\n', '')
+                    json_response = json.dumps({'type': mode, 'error': error})
                 await client_websocket.send(json_response)
                 print("Mensaje enviado al cliente")
             else:
-                print(f"No se encontró el cliente asignado al id {query_id}")
+                print(f"No se encontró el cliente asignado para la solicitud {query_id}")
         # Wait 100 ms to check again
         time.sleep(0.1)
 
